@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classificador da Reforma Tributária — descubra como seu produto será tributado</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap">
+  <h1>Classificador da Reforma Tributária</h1>
+  <p>Digite o NCM do seu produto ou o código NBS do seu serviço e veja, em linguagem simples, se ele tem redução, isenção ou tratamento especial de CBS e IBS.</p>
+  <nav><a href="index.html" class="on">Classificador</a><a href="erros.html">Guia de erros</a></nav>
+</div></header>
+
+<main>
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <button id="tab-ncm" class="on" role="tab">Produto (NCM)</button>
+      <button id="tab-nbs" role="tab">Serviço (NBS)</button>
+      <button id="tab-cat" role="tab">Todas as classificações</button>
+    </div>
+    <div id="busca">
+      <label for="q" id="q-label">Código NCM ou nome do produto</label>
+      <input id="q" type="text" autocomplete="off" placeholder="Ex.: 0401.10.10 ou leite">
+      <div class="hint" id="q-hint">O NCM fica na nota fiscal de compra do produto ou no cadastro do seu sistema de vendas.</div>
+      <div class="results" id="results"></div>
+    </div>
+    <div id="status" class="muted" style="margin-top:10px">Carregando base de dados…</div>
+  </section>
+
+  <section id="out"></section>
+</main>
+
+<footer>
+  <p><strong>Aviso:</strong> ferramenta independente e informativa, sem vínculo com a Receita Federal. Ela não substitui a orientação de um contador. Algumas classificações exigem requisitos adicionais (tipo de comprador, registro em órgão, destinação do produto) que esta consulta não verifica.</p>
+  <p>Dados extraídos da <a href="https://github.com/ReceitaFederal/calculadora-rtc-regime-regular">Calculadora de Tributos — Regime Regular</a> (código aberto, licença MIT, © 2026 Receita Federal do Brasil). <span id="versao"></span></p>
+</footer>
+
+<script>
+"use strict";
+const CST_EXPLICA = {
+  "000": ["Tributação integral", "Paga CBS e IBS com a alíquota cheia, sem desconto."],
+  "010": ["Alíquota uniforme", "Usa uma alíquota única nacional, definida em lei para esse setor."],
+  "011": ["Alíquota uniforme reduzida", "Usa uma alíquota única nacional, com redução prevista em lei."],
+  "200": ["Alíquota reduzida", "Paga CBS e IBS com desconto na alíquota."],
+  "220": ["Alíquota fixa", "Paga um valor fixo definido em lei, e não um percentual do preço."],
+  "221": ["Alíquota fixa proporcional", "Paga um valor fixo proporcional definido em lei."],
+  "222": ["Redução da base de cálculo", "O imposto incide sobre só uma parte do valor da venda."],
+  "400": ["Isenção", "Não paga CBS nem IBS nesta operação."],
+  "410": ["Imunidade / não incidência", "A operação está fora do campo dos tributos: não há CBS nem IBS."],
+  "510": ["Diferimento", "O pagamento é adiado para uma etapa seguinte da cadeia."],
+  "515": ["Diferimento com redução", "O pagamento é adiado e, quando cobrado, tem alíquota reduzida."],
+  "550": ["Suspensão", "A cobrança fica suspensa enquanto as condições do regime forem cumpridas."],
+  "620": ["Tributação monofásica", "O tributo é cobrado uma única vez na cadeia (comum em combustíveis)."],
+  "800": ["Transferência de crédito", "Operação de transferência de créditos, sem cobrança direta."],
+  "810": ["Ajustes na Zona Franca de Manaus", "Ajustes específicos de IBS para a ZFM."],
+  "811": ["Ajustes", "Lançamento de ajuste, não é uma venda comum."],
+  "820": ["Documento específico", "A tributação é informada em documento próprio do setor."],
+  "830": ["Exclusão da base de cálculo", "Parte do valor é excluída do cálculo."]
+};
+const CST_IS = {"000":"Incide Imposto Seletivo","100":"Imunidade do Imposto Seletivo","200":"Não ocorre fato gerador do IS","300":"Devolução","400":"Suspensão do IS","500":"Alíquota zero de IS","600":"Isenção de IS"};
+
+let DB = null, NCM = null, NBS = null, modo = "ncm";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, ...kids){
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs||{})) { if (k==="class") e.className=v; else if (k==="text") e.textContent=v; else e.setAttribute(k,v); }
+  for (const k of kids) if (k!=null) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+}
+const fmtNcm = c => c.length===8 ? `${c.slice(0,4)}.${c.slice(4,6)}.${c.slice(6)}` : c;
+const fmtNbs = c => c.length===9 ? `${c.slice(0,1)}.${c.slice(1,5)}.${c.slice(5,7)}.${c.slice(7)}` : c;
+const brl = v => v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+
+async function carregar(){
+  try{
+    const [r,n,s] = await Promise.all(["data/regras.json","data/ncm.json","data/nbs.json"].map(u=>fetch(u).then(x=>{if(!x.ok)throw new Error(u);return x.json()})));
+    DB=r; NCM=n; NBS=s;
+    $("status").textContent = `Base carregada: ${Object.keys(NCM).length.toLocaleString("pt-BR")} NCMs e ${Object.keys(NBS).length.toLocaleString("pt-BR")} NBSs.`;
+    const v = DB.meta.versaoBase;
+    $("versao").textContent = `Base de dados ${v[3]}, de ${v[1].slice(0,10).split("-").reverse().join("/")}: ${v[2]}`;
+    NCM._idx = Object.entries(NCM).map(([c,d])=>[c,d,norm(d)]);
+    NBS._idx = Object.entries(NBS).map(([c,d])=>[c,d,norm(d)]);
+  }catch(e){
+    $("status").textContent = "Não consegui carregar a base. Abra esta página por um servidor (GitHub Pages ou 'python -m http.server'), e não direto do arquivo.";
+  }
+}
+
+function setModo(m){
+  modo=m;
+  for (const [id,mm] of [["tab-ncm","ncm"],["tab-nbs","nbs"],["tab-cat","cat"]]) $(id).classList.toggle("on", mm===m);
+  $("q").value=""; $("results").style.display="none"; $("out").replaceChildren();
+  if (m==="ncm"){ $("q-label").textContent="Código NCM ou nome do produto"; $("q").placeholder="Ex.: 0401.10.10 ou leite"; $("q-hint").textContent="O NCM fica na nota fiscal de compra do produto ou no cadastro do seu sistema de vendas."; }
+  if (m==="nbs"){ $("q-label").textContent="Código NBS ou nome do serviço"; $("q").placeholder="Ex.: 1.2301.11.00 ou consultoria"; $("q-hint").textContent="A NBS é a classificação de serviços usada na NFS-e."; }
+  if (m==="cat"){ $("q-label").textContent="Buscar classificação (cClassTrib) por código ou assunto"; $("q").placeholder="Ex.: 200003, saúde, educação, cesta básica"; $("q-hint").textContent="Lista todas as classificações tributárias vigentes de CBS/IBS."; mostrarCatalogo(""); }
+  $("q").focus();
+}
+
+function buscar(){
+  if (!DB) return;
+  const q = $("q").value.trim();
+  if (modo==="cat") return mostrarCatalogo(q);
+  const box = $("results"); box.replaceChildren();
+  if (q.length<2){ box.style.display="none"; return; }
+  const base = modo==="ncm" ? NCM : NBS, fmt = modo==="ncm" ? fmtNcm : fmtNbs;
+  const dig = q.replace(/[.\s-]/g,"");
+  let hits;
+  if (/^\d+$/.test(dig)) hits = base._idx.filter(([c])=>c.startsWith(dig));
+  else { const termos = norm(q).split(/\s+/); hits = base._idx.filter(([,,n])=>termos.every(t=>n.includes(t))); }
+  if (/^\d+$/.test(dig) && base[dig]) return mostrar(dig);
+  for (const [c,d] of hits.slice(0,60)){
+    const b = el("button",{type:"button"}, el("code",{text:fmt(c)}), d.length>160? d.slice(0,160)+"…" : d);
+    b.onclick = ()=>mostrar(c); box.append(b);
+  }
+  if (!hits.length) box.append(el("div",{class:"muted",style:"padding:10px"},"Nada encontrado. Tente outra palavra ou só os primeiros dígitos do código."));
+  else if (hits.length>60) box.append(el("div",{class:"muted",style:"padding:10px;font-size:.85rem"},`Mostrando 60 de ${hits.length}. Refine a busca.`));
+  box.style.display="block";
+}
+
+function regrasPara(codigo){
+  const lista = modo==="ncm" ? DB.regrasNcm : DB.regrasNbs;
+  const out=[];
+  for (const [pref,cd,anexo,exc] of lista){
+    if (!codigo.startsWith(pref)) continue;
+    if (exc.some(e=>codigo.startsWith(e))) continue;
+    const prev = out.find(r=>r.cd===cd);
+    if (prev){ if (anexo && !prev.anexo.includes(anexo)) prev.anexo += (prev.anexo?" · ":"") + anexo; continue; }
+    out.push({cd, anexo, c: DB.classes[cd]});
+  }
+  out.sort((a,b)=> a.c.tributo.localeCompare(b.c.tributo) || a.cd.localeCompare(b.cd));
+  return out;
+}
+
+function reducaoTexto(c){
+  const r=c.reducao||{}, vals=[r.cbs,r.ibsUf,r.ibsMun].filter(v=>v!=null);
+  if (!vals.length) return null;
+  const same = vals.every(v=>v===vals[0]);
+  if (same && vals[0]===0) return null;
+  if (same && vals[0]===100) return "Alíquota zero (redução de 100%)";
+  if (same) return `Redução de ${vals[0].toLocaleString("pt-BR")}% na CBS e no IBS`;
+  return `Redução: CBS ${r.cbs??0}%, IBS estadual ${r.ibsUf??0}%, IBS municipal ${r.ibsMun??0}%`;
+}
+
+function cardClassificacao(cd, c, anexo){
+  const isIS = c.tributo==="IS";
+  const red = c.reducao||{}, redMax = Math.max(red.cbs||0, red.ibsUf||0);
+  const tipo = isIS ? ["Imposto Seletivo", CST_IS[c.cst]||c.cstDesc] : (CST_EXPLICA[c.cst]||[c.cstDesc,""]);
+  const card = el("div",{class:"trat "+(isIS?"is":(redMax>0||["400","410"].includes(c.cst)?"good":""))});
+  card.append(el("div",{},
+    el("span",{class:"pill "+(isIS?"i":"b"),text:isIS?"Imposto Seletivo":"CBS / IBS"}),
+    el("span",{class:"pill b",text:"cClassTrib "+c.codigo}),
+    el("span",{class:"pill b",text:"CST "+c.cst}),
+    c.inicio>new Date().toISOString().slice(0,10) ? el("span",{class:"pill w",text:"vale a partir de "+c.inicio.split("-").reverse().join("/")}) : null));
+  card.append(el("h3",{text:c.desc}));
+  const rt = isIS ? null : reducaoTexto(c);
+  if (rt) card.append(el("div",{class:"big",text:rt}));
+  const explic = (!isIS && redMax===100) ? "Na prática, não paga CBS nem IBS: a lei zera a alíquota." : tipo[1];
+  card.append(el("p",{style:"margin:6px 0 0"}, el("strong",{text:tipo[0]+". "}), isIS ? "Este produto está na lista do Imposto Seletivo (o \"imposto do pecado\"), cobrado a partir de 2027 sobre itens prejudiciais à saúde ou ao meio ambiente." : explic));
+  if (anexo) card.append(el("p",{class:"path",style:"margin:6px 0 0",text:anexo}));
+  if (c.fundCurta) card.append(el("p",{class:"path",style:"margin:6px 0 0",text:"Base legal: " + (c.fundCurta.startsWith("LC") ? c.fundCurta : "LC 214/2025, " + c.fundCurta)}));
+  if (!isIS) card.append(el("p",{class:"path",style:"margin:6px 0 0",text: c.creditoAdquirente ? "Quem compra de você pode aproveitar crédito desta operação." : "Quem compra de você não aproveita crédito desta operação."}));
+  if (c.fundTexto){ const d=el("details",{}, el("summary",{text:"Ler o texto da lei"})); d.append(el("p",{text:c.fundTexto})); card.append(d); }
+  return card;
+}
+
+function simulador(regra){
+  const c = regra ? regra.c : null, red = c ? c.reducao : {};
+  const ref = DB.meta.aliquotaReferencia2026;
+  const wrap = el("section",{class:"card"});
+  wrap.append(el("h2",{text:"Quanto isso pesa no preço?"}));
+  wrap.append(el("p",{class:"muted",style:"margin:0 0 8px",text: c ? `Usando a classificação ${c.codigo}${reducaoTexto(c)?": "+reducaoTexto(c).toLowerCase():""}.` : "Usando a regra geral (tributação integral)."}));
+  const g = el("div",{class:"sim"});
+  const preco = el("input",{type:"number",min:"0",step:"0.01",value:"100"});
+  const cheia = el("input",{type:"number",min:"0",step:"0.1",value:"26.5"});
+  g.append(el("div",{}, el("label",{text:"Preço de venda (R$)"}), preco), el("div",{}, el("label",{text:"Alíquota cheia estimada CBS+IBS (%)"}), cheia));
+  const b26 = el("div",{class:"box"}), bF = el("div",{class:"box"});
+  g.append(b26,bF); wrap.append(g);
+  const f = v => 1 - ((v||0)/100);
+  function calc(){
+    const p = parseFloat(preco.value)||0, a = parseFloat(cheia.value)||0;
+    const t26 = p*(ref.cbs/100)*f(red.cbs) + p*(ref.ibsUf/100)*f(red.ibsUf) + p*(ref.ibsMun/100)*f(red.ibsMun);
+    const redMed = ((red.cbs||0)*(a/3) + (red.ibsUf||0)*(2*a/3))/100/a || 0;
+    const tF = p*(a/100)*(1-redMed);
+    b26.replaceChildren(el("div",{class:"muted",text:"2026 (ano de teste)"}), el("div",{class:"val",text:brl(t26)}), el("div",{class:"hint",text:"CBS 0,9% + IBS 0,1%. Em regra, é compensável com PIS/Cofins e não aumenta a carga."}));
+    bF.replaceChildren(el("div",{class:"muted",text:"Regime completo (estimativa)"}), el("div",{class:"val",text:brl(tF)}), el("div",{class:"hint",text:`Alíquota efetiva de ${(a*(1-redMed)).toLocaleString("pt-BR",{maximumFractionDigits:2})}%. Os percentuais definitivos de 2027 em diante ainda não estão na base oficial.`}));
+  }
+  preco.oninput=calc; cheia.oninput=calc; calc();
+  wrap.append(el("div",{class:"note",text:"Simulação simplificada: considera o imposto \"por fora\" sobre o preço informado e divide a alíquota cheia em 1/3 CBS e 2/3 IBS. Não considera créditos das suas compras, que reduzem o valor efetivamente pago."}));
+  return wrap;
+}
+
+function mostrar(codigo){
+  $("results").style.display="none";
+  const isNcm = modo==="ncm", desc = (isNcm?NCM:NBS)[codigo], fmt = isNcm?fmtNcm:fmtNbs;
+  $("q").value = fmt(codigo);
+  const regras = regrasPara(codigo), cbs = regras.filter(r=>r.c.tributo!=="IS"), is = regras.filter(r=>r.c.tributo==="IS");
+  const out = $("out"); out.replaceChildren();
+  const card = el("section",{class:"card"});
+  card.append(el("div",{class:"muted",text:isNcm?"Produto":"Serviço"}), el("h2",{}, el("span",{class:"code",text:fmt(codigo)})), el("p",{class:"path",text:desc}));
+  if (cbs.length){
+    card.append(el("p",{style:"margin:12px 0 0"}, el("strong",{text:`Encontrei ${cbs.length} tratamento${cbs.length>1?"s":""} especia${cbs.length>1?"is":"l"} de CBS/IBS para este código.`}), " Veja qual se aplica ao seu caso: alguns dependem de quem compra ou de como o item é vendido."));
+    cbs.forEach(r=>card.append(cardClassificacao(r.cd,r.c,r.anexo)));
+  } else {
+    card.append(el("p",{style:"margin:12px 0 0"}, el("strong",{text:"Nenhum tratamento especial vinculado a este código."}), " Em regra, ele segue a tributação integral. Ainda podem existir tratamentos que dependem do tipo de operação (exportação, doação, venda ao governo etc.); consulte a aba \"Todas as classificações\"."));
+    const geral = DB.classes["000001"]; if (geral) card.append(cardClassificacao("000001",geral,""));
+  }
+  if (is.length){
+    const ic = el("div",{class:"trat is"}, el("span",{class:"pill i",text:"Imposto Seletivo · a partir de 2027"}),
+      el("h3",{text:"Este produto está sujeito ao Imposto Seletivo"}),
+      el("p",{style:"margin:6px 0 0",text:"Além de CBS e IBS, ele paga o Imposto Seletivo (o \"imposto do pecado\"), que incide sobre itens prejudiciais à saúde ou ao meio ambiente, como bebidas alcoólicas, cigarros e veículos. As alíquotas ainda serão definidas em lei."}));
+    const d = el("details",{}, el("summary",{text:`Ver as ${is.length} situações de Imposto Seletivo previstas`}));
+    const ul = el("ul",{}); is.forEach(r=>ul.append(el("li",{text:`${r.c.codigo} — ${r.c.desc}`}))); d.append(ul); ic.append(d);
+    card.append(ic);
+  }
+  out.append(card);
+  const melhor = cbs.find(r=>Math.max(r.c.reducao?.cbs||0,r.c.reducao?.ibsUf||0)>0) || null;
+  out.append(simulador(melhor));
+  out.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function mostrarCatalogo(q){
+  const out=$("out"); out.replaceChildren();
+  const termos = norm(q).split(/\s+/).filter(Boolean);
+  const lista = Object.entries(DB.classes).filter(([cd,c])=>c.tributo!=="IS").filter(([cd,c])=>{
+    const t = norm(c.codigo+" "+c.desc+" "+c.cstDesc+" "+c.fundCurta); return termos.every(x=>t.includes(x)); }).sort();
+  const card = el("section",{class:"card"});
+  card.append(el("h2",{text:`${lista.length} classificaç${lista.length===1?"ão":"ões"} de CBS/IBS`}));
+  const tb = el("table",{}); tb.append(el("tr",{}, el("th",{text:"Código"}), el("th",{text:"Descrição"}), el("th",{text:"Tratamento"})));
+  for (const [cd,c] of lista){
+    const tr = el("tr",{style:"cursor:pointer"}, el("td",{}, el("span",{class:"code",text:c.codigo})), el("td",{text:c.desc}), el("td",{text: reducaoTexto(c) || (CST_EXPLICA[c.cst]||[c.cstDesc])[0]}));
+    tr.onclick = ()=>{ out.replaceChildren(el("section",{class:"card"}, el("button",{type:"button",style:"margin-bottom:8px"},"← voltar à lista"), cardClassificacao(cd,c,""))); out.querySelector("button").onclick=()=>mostrarCatalogo($("q").value); };
+    tb.append(tr);
+  }
+  card.append(tb); out.append(card);
+}
+
+$("tab-ncm").onclick=()=>setModo("ncm"); $("tab-nbs").onclick=()=>setModo("nbs"); $("tab-cat").onclick=()=>setModo("cat");
+let t; $("q").addEventListener("input",()=>{clearTimeout(t); t=setTimeout(buscar,180);});
+carregar();
+</script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guia de erros da Reforma Tributária — o que significa e como resolver</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap">
+  <h1>Guia de erros da Reforma Tributária</h1>
+  <p>Sua nota ou sistema devolveu um código como <strong>REG-011</strong>? Aqui está o que ele quer dizer, em português claro, e o que fazer.</p>
+  <nav><a href="index.html">Classificador</a><a href="erros.html" class="on">Guia de erros</a></nav>
+</div></header>
+
+<main>
+  <section class="card">
+    <label for="q">Código do erro ou palavra-chave</label>
+    <input id="q" type="text" autocomplete="off" placeholder="Ex.: REG-011, NCM, município, base de cálculo">
+    <div class="filters" id="filters">
+      <button data-f="" class="on">Todos</button>
+      <button data-f="Cadastro">Resolvo no cadastro</button>
+      <button data-f="Contador">Falar com o contador</button>
+      <button data-f="Sistema">Problema do sistema</button>
+      <button data-f="Aguardar">Aguardar a Receita</button>
+    </div>
+    <p class="hint"><strong>REG</strong> = problema nos dados enviados (quase sempre dá para resolver do seu lado). <strong>CAL</strong> = falha no cálculo ou na base de dados.</p>
+  </section>
+  <section id="out"></section>
+</main>
+
+<footer>
+  <p><strong>Aviso:</strong> material independente e informativo, sem vínculo com a Receita Federal. Não substitui a orientação de um contador.</p>
+  <p>Baseado no catálogo de erros da <a href="https://github.com/ReceitaFederal/calculadora-rtc-regime-regular">Calculadora de Tributos — Regime Regular</a> (código aberto, licença MIT, © 2026 Receita Federal do Brasil), versão 1.7.2.</p>
+</footer>
+
+<script>
+"use strict";
+let ERROS = [], filtro = "";
+const $ = id => document.getElementById(id);
+function el(tag, attrs, ...kids){
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs||{})) { if (k==="class") e.className=v; else if (k==="text") e.textContent=v; else e.setAttribute(k,v); }
+  for (const k of kids) if (k!=null) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+}
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+function render(){
+  const termos = norm($("q").value.trim()).split(/\s+/).filter(Boolean);
+  const lista = ERROS.filter(e => (!filtro || e.quem.includes(filtro)) &&
+    termos.every(t => norm([e.codigo,e.titulo,e.simples,e.acao,e.descricao,e.campo||""].join(" ")).includes(t)));
+  const out = $("out"); out.replaceChildren();
+  const card = el("section",{class:"card"}, el("h2",{text:`${lista.length} erro${lista.length===1?"":"s"}`}));
+  for (const e of lista){
+    const tipo = e.codigo.startsWith("REG") ? ["b","Dados"] : ["w","Cálculo"];
+    card.append(el("div",{class:"err"},
+      el("div",{}, el("span",{class:"pill "+tipo[0],text:e.codigo}), el("span",{class:"pill g",text:"Quem resolve: "+e.quem}), e.campo ? el("span",{class:"pill b",text:"campo: "+e.campo}) : null),
+      el("h3",{text:e.titulo}),
+      el("p",{}, el("strong",{text:"O que significa: "}), e.simples),
+      el("p",{}, el("strong",{text:"O que fazer: "}), e.acao),
+      el("p",{class:"tec",text:"Texto técnico oficial: "+e.descricao})));
+  }
+  if (!lista.length) card.append(el("p",{class:"muted",text:"Nenhum erro encontrado com esse filtro."}));
+  out.append(card);
+}
+document.querySelectorAll("#filters button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#filters button").forEach(x => x.classList.toggle("on", x===b));
+  filtro = b.dataset.f; render();
+});
+$("q").addEventListener("input", render);
+fetch("data/erros.json").then(r=>r.json()).then(d=>{ ERROS=d; const p=new URLSearchParams(location.search).get("codigo"); if(p) $("q").value=p; render(); })
+  .catch(()=>{ $("out").replaceChildren(el("section",{class:"card",text:"Não consegui carregar a lista. Abra pelo GitHub Pages ou por um servidor local."})); });
+</script>
+</body>
+</html>

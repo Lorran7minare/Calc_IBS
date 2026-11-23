@@ -1,0 +1,60 @@
+  :root{
+    --bg:#f6f5f1; --card:#ffffff; --ink:#1d2321; --muted:#5d6763; --line:#e2e0d8;
+    --brand:#0f5c4a; --brand-soft:#e3efe9; --warn:#8a5a00; --warn-soft:#fbf1dc;
+    --good:#1d6b3a; --good-soft:#e5f3e8; --is:#7a2f4f; --is-soft:#f6e6ec;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+  header{background:var(--brand);color:#fff;padding:28px 20px 56px}
+  header .wrap{max-width:920px;margin:0 auto}
+  header h1{margin:0 0 6px;font-size:1.65rem;letter-spacing:-.01em}
+  header p{margin:0;opacity:.88;max-width:640px}
+  nav{display:flex;gap:6px;margin-top:18px;flex-wrap:wrap}
+  nav a{color:#fff;text-decoration:none;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.12);font-size:.9rem}
+  nav a.on{background:#fff;color:var(--brand);font-weight:600}
+  main{max-width:920px;margin:-36px auto 40px;padding:0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+  .tabs{display:flex;gap:4px;margin-bottom:14px}
+  .tabs button{flex:1;border:1px solid var(--line);background:#fafaf7;padding:10px;border-radius:8px;cursor:pointer;font-size:.95rem;color:var(--muted)}
+  .tabs button.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);font-weight:600}
+  label{font-size:.85rem;color:var(--muted);display:block;margin-bottom:4px}
+  input[type=text],input[type=number]{width:100%;padding:12px 14px;font-size:1.05rem;border:1px solid var(--line);border-radius:8px;background:#fff}
+  input:focus{outline:2px solid var(--brand);outline-offset:1px}
+  .hint{font-size:.82rem;color:var(--muted);margin-top:6px}
+  .results{margin-top:10px;max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px;display:none}
+  .results button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:#fff;padding:10px 12px;cursor:pointer;font-size:.92rem}
+  .results button:hover{background:var(--brand-soft)}
+  .results code{font-weight:700;color:var(--brand);margin-right:8px}
+  h2{font-size:1.15rem;margin:0 0 4px}
+  .code{font-family:ui-monospace,Menlo,monospace;background:#f0efe9;padding:2px 6px;border-radius:5px;font-size:.9em}
+  .path{color:var(--muted);font-size:.92rem}
+  .trat{border:1px solid var(--line);border-left:5px solid var(--brand);border-radius:10px;padding:14px 16px;margin-top:12px}
+  .trat.good{border-left-color:var(--good)}
+  .trat.is{border-left-color:var(--is)}
+  .trat h3{margin:0 0 4px;font-size:1.02rem}
+  .pill{display:inline-block;font-size:.75rem;padding:2px 9px;border-radius:999px;margin:2px 4px 2px 0;font-weight:600}
+  .pill.g{background:var(--good-soft);color:var(--good)}
+  .pill.b{background:var(--brand-soft);color:var(--brand)}
+  .pill.w{background:var(--warn-soft);color:var(--warn)}
+  .pill.i{background:var(--is-soft);color:var(--is)}
+  .big{font-size:1.5rem;font-weight:700;color:var(--good)}
+  details{margin-top:8px;font-size:.88rem;color:var(--muted)}
+  details summary{cursor:pointer;color:var(--brand)}
+  .sim{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+  .sim .box{background:#fafaf7;border:1px solid var(--line);border-radius:8px;padding:12px}
+  .sim .val{font-size:1.25rem;font-weight:700}
+  .note{background:var(--warn-soft);color:#5a3d00;border-radius:8px;padding:10px 12px;font-size:.86rem;margin-top:12px}
+  .muted{color:var(--muted)}
+  footer{max-width:920px;margin:0 auto 40px;padding:0 16px;font-size:.8rem;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:.9rem}
+  th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{font-size:.78rem;text-transform:uppercase;color:var(--muted);letter-spacing:.03em}
+  @media (max-width:600px){.sim{grid-template-columns:1fr}.tabs{flex-direction:column}}
+  .err{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:10px;background:#fff}
+  .err h3{margin:0 0 6px;font-size:1rem}
+  .err p{margin:4px 0}
+  .err .tec{font-size:.82rem;color:var(--muted);border-top:1px dashed var(--line);margin-top:8px;padding-top:6px}
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .filters button{border:1px solid var(--line);background:#fafaf7;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:.85rem;color:var(--muted)}
+  .filters button.on{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);font-weight:600}
